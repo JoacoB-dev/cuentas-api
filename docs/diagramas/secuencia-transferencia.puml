@@ -1,0 +1,61 @@
+@startuml secuencia-transferencia
+skinparam dpi 150
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam sequenceMessageAlign left
+title POST /api/transferencias (con Idempotency-Key)
+
+actor Cliente
+participant "Filtro JWT\n(Spring Security)" as Sec
+participant TransferenciaController as C
+participant TransferenciaService as S
+participant "EjecutorDeTransferencias\n@Transactional" as E
+database PostgreSQL as DB
+
+Cliente -> Sec : POST /api/transferencias\nAuthorization: Bearer ...\nIdempotency-Key: k1
+Sec -> Sec : valida firma, vencimiento y emisor
+Sec -> C : usuario autenticado (rol, clienteId)
+C -> C : Bean Validation\n(importe > 0, 2 decimales, CBU con dígitos verificadores)
+C -> S : transferir(pedido, k1, usuario)
+S -> DB : buscar transferencia (usuario, k1)
+alt ya existe con el mismo hash
+  S --> C : la original (repetida = true)
+  C --> Cliente : 201 + Idempotent-Replayed: true
+else ya existe con otros datos
+  S --> Cliente : 422 clave-idempotencia-reutilizada
+else no existe
+  S -> E : ejecutar(...)
+  activate E
+  E -> DB : BEGIN
+  E -> DB : id de la cuenta destino por CBU
+  E -> DB : SELECT ... FOR NO KEY UPDATE\n(cuenta de id MENOR)
+  E -> DB : SELECT ... FOR NO KEY UPDATE\n(cuenta de id MAYOR)
+  note right of E
+    Orden fijo de bloqueo:
+    A->B y B->A esperan la misma fila
+    primero, así que no hay deadlock.
+  end note
+  E -> E : verifica dueño, moneda, cuenta activa
+  E -> DB : ¿k1 ya confirmada mientras esperaba?
+  E -> DB : suma enviada hoy (hora AR) vs límite diario
+  alt todo en regla
+    E -> E : origen.debitar() / destino.acreditar()
+    E -> DB : INSERT transferencia (UNIQUE usuario+clave)
+    E -> DB : INSERT 2 movimientos
+    E -> DB : COMMIT
+    E --> S : transferencia nueva
+    S --> C : repetida = false
+    C --> Cliente : 201 Created + Location\nIdempotent-Replayed: false
+  else regla de negocio violada (saldo, moneda, límite, bloqueo)
+    E -> DB : ROLLBACK
+    E --> Cliente : 422 ProblemDetail (codigo + detail en castellano)
+  else k1 ya confirmada por otro pedido, o choque con la UNIQUE
+    E -> DB : ROLLBACK (no se movió plata)
+    E --> S : YaProcesada / DataIntegrityViolation
+    S -> DB : busca la transferencia ganadora (lectura nueva)
+    S --> C : la original (repetida = true)
+    C --> Cliente : 201 + Idempotent-Replayed: true
+  end
+  deactivate E
+end
+@enduml

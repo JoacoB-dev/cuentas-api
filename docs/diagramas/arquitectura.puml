@@ -1,0 +1,97 @@
+@startuml arquitectura
+!pragma layout smetana
+skinparam dpi 150
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+title API de cuentas y transferencias - capas y modelo
+
+package "web (controllers + DTOs)" as web {
+  class AuthController
+  class ClienteController
+  class CuentaController
+  class TransferenciaController
+  class ManejadorDeErrores <<RestControllerAdvice>>
+}
+
+package "seguridad" as seg {
+  class SeguridadConfig <<JWT HS256>>
+  class TokenService
+}
+
+package "servicio" as srv {
+  class AuthService
+  class ClienteService
+  class CuentaService
+  class MovimientoService
+  class TransferenciaService <<idempotencia>>
+  class EjecutorDeTransferencias <<@Transactional>>
+}
+
+package "repositorio (Spring Data JPA)" as repo {
+  interface CuentaRepository {
+    buscarParaActualizar(id) : FOR NO KEY UPDATE
+  }
+  interface TransferenciaRepository
+  interface MovimientoRepository
+  interface ClienteRepository
+  interface UsuarioRepository
+}
+
+package "dominio" as dom {
+  class Cliente {
+    nombre, apellido, dni, email
+  }
+  class Cuenta {
+    cbu : String(22)
+    tipo : CA | CC
+    moneda : ARS | USD
+    estado : ACTIVA | BLOQUEADA
+    saldo, descubiertoAutorizado, limiteDiario
+    --
+    debitar(importe)
+    acreditar(importe)
+  }
+  class Movimiento {
+    tipo : DEBITO | CREDITO
+    importe, saldoPosterior, fecha
+  }
+  class Transferencia {
+    importe, moneda, concepto
+    usuario + idempotencyKey (UNIQUE)
+    hashSolicitud
+  }
+  class Usuario {
+    username, passwordHash (BCrypt)
+    rol : CLIENTE | OPERADOR
+  }
+  class Cbu <<algoritmo BCRA>>
+}
+
+class "PostgreSQL 16" as pg <<base de datos>> {
+  esquema versionado con Flyway
+}
+
+AuthController --> AuthService
+ClienteController --> ClienteService
+CuentaController --> CuentaService
+CuentaController --> MovimientoService
+TransferenciaController --> TransferenciaService
+TransferenciaService --> EjecutorDeTransferencias
+AuthService --> TokenService
+
+EjecutorDeTransferencias --> CuentaRepository
+EjecutorDeTransferencias --> TransferenciaRepository
+EjecutorDeTransferencias --> MovimientoRepository
+
+Cliente "1" -- "0..*" Cuenta
+Cuenta "1" -- "0..*" Movimiento
+Transferencia "1" -- "2" Movimiento
+Usuario "0..1" -- "1" Cliente
+Cuenta ..> Cbu
+
+CuentaRepository ..> pg
+TransferenciaRepository ..> pg
+MovimientoRepository ..> pg
+@enduml

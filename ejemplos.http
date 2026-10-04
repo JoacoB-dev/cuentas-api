@@ -1,0 +1,95 @@
+### Ejemplos para el cliente HTTP de IntelliJ / VS Code (extensión REST Client).
+### Requiere la app corriendo con los datos demo (CARGAR_DATOS_DEMO=true).
+### CBUs demo: Ana ARS 9990001800000000010001 · Ana USD 9990001800000000010018
+###            Bruno ARS 9990001800000000010025 · Bruno USD 9990001800000000010032
+
+@base = http://localhost:8080
+
+### 1. Login como cliente (Ana)
+# @name loginAna
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{"username": "ana", "password": "ana123"}
+
+### Guardar el token
+@token = {{loginAna.response.body.token}}
+
+### 2. Mis cuentas
+GET {{base}}/api/cuentas
+Authorization: Bearer {{token}}
+
+### 3. Transferir a Bruno (ARS). Repetir este mismo pedido NO transfiere dos veces.
+POST {{base}}/api/transferencias
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Idempotency-Key: 5b8f2c1e-alquiler-octubre
+
+{"cuentaOrigenId": 1, "cbuDestino": "9990001800000000010025", "importe": 85000, "concepto": "Alquiler octubre"}
+
+### 4. Error: monedas distintas (ARS -> USD) -> 422
+POST {{base}}/api/transferencias
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Idempotency-Key: prueba-monedas
+
+{"cuentaOrigenId": 1, "cbuDestino": "9990001800000000010032", "importe": 10}
+
+### 5. Error: CBU con dígito verificador incorrecto -> 400
+POST {{base}}/api/transferencias
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Idempotency-Key: prueba-cbu
+
+{"cuentaOrigenId": 1, "cbuDestino": "9990001800000000010026", "importe": 10}
+
+### 6. Movimientos paginados con filtro de fechas
+GET {{base}}/api/cuentas/1/movimientos?desde=2026-01-01&hasta=2026-12-31&pagina=0&tamanio=10
+Authorization: Bearer {{token}}
+
+### 7. Extracto del período (por defecto, últimos 30 días)
+GET {{base}}/api/cuentas/1/extracto
+Authorization: Bearer {{token}}
+
+### 8. Cuenta ajena -> 404
+GET {{base}}/api/cuentas/3
+Authorization: Bearer {{token}}
+
+### ---- Operador ----
+
+# @name loginOperador
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{"username": "operador", "password": "operador123"}
+
+###
+@tokenOp = {{loginOperador.response.body.token}}
+
+### Alta de cliente
+POST {{base}}/api/clientes
+Authorization: Bearer {{tokenOp}}
+Content-Type: application/json
+
+{"nombre": "Carla", "apellido": "Ruiz", "dni": "40123456", "email": "carla@example.com"}
+
+### Abrir cuenta corriente en ARS con descubierto
+POST {{base}}/api/cuentas
+Authorization: Bearer {{tokenOp}}
+Content-Type: application/json
+
+{"clienteId": 1, "tipo": "CC", "moneda": "ARS", "limiteDiario": 500000, "descubiertoAutorizado": 20000}
+
+### Depósito por ventanilla
+POST {{base}}/api/cuentas/1/depositos
+Authorization: Bearer {{tokenOp}}
+Content-Type: application/json
+
+{"importe": 15000, "descripcion": "Depósito en efectivo"}
+
+### Bloquear una cuenta
+PATCH {{base}}/api/cuentas/4/estado
+Authorization: Bearer {{tokenOp}}
+Content-Type: application/json
+
+{"estado": "BLOQUEADA"}

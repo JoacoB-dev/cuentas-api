@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: cuentas-api
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/cuentas}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  mvc:
+    problemdetails:
+      enabled: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: ${PORT:8080}
+  error:
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+  api-docs:
+    path: /v3/api-docs
+
+app:
+  zona-horaria: America/Argentina/Buenos_Aires
+  cbu:
+    # Código de entidad (3 dígitos) y sucursal (4 dígitos) ficticios.
+    entidad: "999"
+    sucursal: "0001"
+  jwt:
+    # SOLO PARA DESARROLLO LOCAL. En cualquier otro entorno definir JWT_SECRET
+    # (mínimo 32 caracteres). Si se usa este valor, la app lo avisa en el log.
+    secreto: ${JWT_SECRET:solo-desarrollo-local-cambiar-por-JWT_SECRET-0123456789}
+    duracion-minutos: ${JWT_DURACION_MINUTOS:60}
+  demo:
+    # Carga clientes, cuentas y usuarios de ejemplo si la base está vacía.
+    cargar-datos: ${CARGAR_DATOS_DEMO:true}

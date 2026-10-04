@@ -1,0 +1,24 @@
+# Perfil de tests: usa un PostgreSQL real (no H2) para que los locks y
+# las constraints se comporten igual que en producción.
+# Por defecto apunta a una base local "cuentas_test"; se puede cambiar con
+# TEST_DB_URL / TEST_DB_USER / TEST_DB_PASSWORD (así lo hace el workflow de CI).
+spring:
+  datasource:
+    url: ${TEST_DB_URL:jdbc:postgresql://localhost:5432/cuentas_test}
+    username: ${TEST_DB_USER:postgres}
+    password: ${TEST_DB_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: 30
+  flyway:
+    clean-disabled: false
+
+app:
+  jwt:
+    secreto: secreto-de-tests-no-usar-en-ningun-otro-lado-0123456789
+  demo:
+    cargar-datos: false
+
+logging:
+  level:
+    root: WARN
+    ar.cuentas: INFO
