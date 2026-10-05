@@ -14,6 +14,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
@@ -24,7 +26,8 @@ import java.util.Map;
 
 /**
  * Base de los tests de integración. Usan un PostgreSQL real (perfil "test",
- * base cuentas_test). Antes de cada test se vacían las tablas y se cargan:
+ * base cuentas_test) y un Redis real (base 1). Antes de cada test se vacían Redis
+ * y las tablas, y se cargan:
  * <ul>
  *   <li>Ana (usuario "ana", CLIENTE): CA en ARS con 50.000 y límite diario 100.000; CA en USD con 1.000.</li>
  *   <li>Bruno (usuario "bruno", CLIENTE): CC en ARS con 20.000 y descubierto de 10.000.</li>
@@ -48,6 +51,8 @@ abstract class BaseIntegracion {
     protected UsuarioRepository usuarios;
     @Autowired
     protected PasswordEncoder passwordEncoder;
+    @Autowired
+    protected StringRedisTemplate redis;
 
     protected Long anaId;
     protected Long brunoId;
@@ -60,6 +65,7 @@ abstract class BaseIntegracion {
 
     @BeforeEach
     void cargarDatosBase() {
+        limpiarRedis();
         jdbc.execute("TRUNCATE movimiento, transferencia, cuenta, usuario, cliente RESTART IDENTITY CASCADE");
         anaId = clienteService.crear(new ClienteRequest("Ana", "Gómez", "30111222", "ana@example.com")).id();
         brunoId = clienteService.crear(new ClienteRequest("Bruno", "Díaz", "28999888", "bruno@example.com")).id();
@@ -69,6 +75,17 @@ abstract class BaseIntegracion {
         crearUsuario("ana", Rol.CLIENTE, anaId);
         crearUsuario("bruno", Rol.CLIENTE, brunoId);
         crearUsuario("operador", Rol.OPERADOR, null);
+    }
+
+    /**
+     * Vacía la base de Redis de los tests. Es necesario porque TRUNCATE ... RESTART IDENTITY
+     * reutiliza los ids: sin esto, el caché de un test anterior aparecería en el siguiente.
+     */
+    protected void limpiarRedis() {
+        redis.execute((RedisCallback<Void>) conexion -> {
+            conexion.serverCommands().flushDb();
+            return null;
+        });
     }
 
     protected CuentaResponse crearCuenta(Long clienteId, TipoCuenta tipo, Moneda moneda, String limiteDiario,

@@ -4,3 +4,5 @@ target/
 .vscode/
 docs/
 .env
+web/
+.github/

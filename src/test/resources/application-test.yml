@@ -11,6 +11,13 @@ spring:
       maximum-pool-size: 30
   flyway:
     clean-disabled: false
+  data:
+    redis:
+      # Redis real (no un mock). Se usa la base 1 para no pisar datos de desarrollo:
+      # cada test hace FLUSHDB de esa base. Se puede cambiar con TEST_REDIS_*.
+      host: ${TEST_REDIS_HOST:localhost}
+      port: ${TEST_REDIS_PORT:6379}
+      database: ${TEST_REDIS_DB:1}
 
 app:
   jwt:

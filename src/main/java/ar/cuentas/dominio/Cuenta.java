@@ -1,7 +1,9 @@
 package ar.cuentas.dominio;
 
 import jakarta.persistence.Column;
+import ar.cuentas.cache.InvalidadorDeCacheDeCuentas;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
@@ -21,6 +23,7 @@ import java.time.Instant;
  */
 @Entity
 @Table(name = "cuenta")
+@EntityListeners(InvalidadorDeCacheDeCuentas.class) // invalida el caché de cuentas del cliente
 public class Cuenta {
 
     @Id

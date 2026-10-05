@@ -1,5 +1,6 @@
 package ar.cuentas.servicio;
 
+import ar.cuentas.cache.CuentasDelClienteService;
 import ar.cuentas.config.CbuProperties;
 import ar.cuentas.dominio.Cbu;
 import ar.cuentas.dominio.Cliente;
@@ -32,26 +33,32 @@ public class CuentaService {
     private final MovimientoRepository movimientos;
     private final CbuProperties cbu;
     private final Clock reloj;
+    private final CuentasDelClienteService cuentasDelCliente;
 
     public CuentaService(CuentaRepository cuentas, ClienteRepository clientes, MovimientoRepository movimientos,
-                         CbuProperties cbu, Clock reloj) {
+                         CbuProperties cbu, Clock reloj, CuentasDelClienteService cuentasDelCliente) {
         this.cuentas = cuentas;
         this.clientes = clientes;
         this.movimientos = movimientos;
         this.cbu = cbu;
         this.reloj = reloj;
+        this.cuentasDelCliente = cuentasDelCliente;
     }
 
-    /** OPERADOR ve todas; CLIENTE sólo las propias. */
+    /**
+     * OPERADOR ve todas; CLIENTE sólo las propias. El listado de un cliente sale del
+     * caché en Redis (ver CuentasDelClienteService); el listado completo del operador no
+     * se cachea (cambia con cualquier operación de cualquier cliente).
+     */
     @Transactional(readOnly = true)
     public List<CuentaResponse> listar(UsuarioActual usuario, Long clienteId) {
-        List<Cuenta> resultado;
         if (usuario.esOperador()) {
-            resultado = clienteId == null ? cuentas.findAllByOrderByIdAsc() : cuentas.findByClienteIdOrderByIdAsc(clienteId);
-        } else {
-            resultado = cuentas.findByClienteIdOrderByIdAsc(usuario.clienteId());
+            if (clienteId == null) {
+                return cuentas.findAllByOrderByIdAsc().stream().map(CuentaResponse::de).toList();
+            }
+            return cuentasDelCliente.listar(clienteId);
         }
-        return resultado.stream().map(CuentaResponse::de).toList();
+        return cuentasDelCliente.listar(usuario.clienteId());
     }
 
     @Transactional(readOnly = true)

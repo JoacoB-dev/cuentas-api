@@ -1,14 +1,20 @@
-# Levanta PostgreSQL 16 + la API. Uso: copiar .env.example a .env, completar
-# JWT_SECRET y correr "docker compose up --build".
+# Levanta todo el proyecto: PostgreSQL 16 + Redis 7 + API (Spring Boot) + web (Angular servido por nginx).
+# Uso: copiar .env.example a .env, completar JWT_SECRET y correr "docker compose up --build".
+#   Web:     http://localhost:4201   (nginx; /api se redirige a la API)
+#   API:     http://localhost:8082   (Swagger UI en /swagger-ui.html)
+#   Postgres: localhost:54321 · Redis: localhost:63791 (puertos poco comunes para no chocar con instalaciones locales)
+name: cuentas
+
 services:
   db:
     image: postgres:16
+    container_name: cuentas-db
     environment:
       POSTGRES_DB: cuentas
       POSTGRES_USER: cuentas
       POSTGRES_PASSWORD: ${DB_PASSWORD:-cuentas}
     ports:
-      - "5432:5432"
+      - "54321:5432"
     volumes:
       - datos-postgres:/var/lib/postgresql/data
     healthcheck:
@@ -17,19 +23,55 @@ services:
       timeout: 3s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: cuentas-redis
+    # Sin persistencia: sólo guarda caché y contadores de login, que se pueden perder.
+    # volatile-lru: si se llena, descarta claves con TTL (todas las de la app lo tienen).
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "volatile-lru"]
+    ports:
+      - "63791:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   api:
     build: .
+    image: cuentas-api:local
+    container_name: cuentas-api
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     environment:
       DB_URL: jdbc:postgresql://db:5432/cuentas
       DB_USER: cuentas
       DB_PASSWORD: ${DB_PASSWORD:-cuentas}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       JWT_SECRET: ${JWT_SECRET:?Definí JWT_SECRET (mínimo 32 caracteres) en el archivo .env}
       CARGAR_DATOS_DEMO: ${CARGAR_DATOS_DEMO:-true}
     ports:
-      - "8080:8080"
+      - "8082:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8080/actuator/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
+  web:
+    build: ./web
+    image: cuentas-web:local
+    container_name: cuentas-web
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "4201:80"
 
 volumes:
   datos-postgres:

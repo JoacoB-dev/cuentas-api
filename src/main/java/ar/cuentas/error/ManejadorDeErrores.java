@@ -65,6 +65,15 @@ public class ManejadorDeErrores extends ResponseEntityExceptionHandler {
                         ex.getMessage(), req));
     }
 
+    /** Límite de intentos de login (ver LimitadorDeIntentosDeLogin). */
+    @ExceptionHandler(DemasiadosIntentosException.class)
+    public ResponseEntity<ProblemDetail> demasiadosIntentos(DemasiadosIntentosException ex, HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getSegundosDeEspera()))
+                .body(problema(HttpStatus.TOO_MANY_REQUESTS, "demasiados-intentos", "Demasiados intentos",
+                        ex.getMessage(), req));
+    }
+
     /** Lo lanza @PreAuthorize cuando el rol no alcanza. */
     @ExceptionHandler(AccessDeniedException.class)
     public ProblemDetail accesoDenegado(AccessDeniedException ex, HttpServletRequest req) {

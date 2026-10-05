@@ -15,6 +15,14 @@ spring:
           time_zone: UTC
   flyway:
     enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      # Timeouts cortos: si Redis no responde, la app sigue andando sin caché
+      # (ver CacheConfig y LimitadorDeIntentosDeLogin) en vez de colgarse.
+      timeout: 500ms
+      connect-timeout: 500ms
   mvc:
     problemdetails:
       enabled: true
@@ -51,6 +59,14 @@ app:
     # (mínimo 32 caracteres). Si se usa este valor, la app lo avisa en el log.
     secreto: ${JWT_SECRET:solo-desarrollo-local-cambiar-por-JWT_SECRET-0123456789}
     duracion-minutos: ${JWT_DURACION_MINUTOS:60}
+  cache:
+    # Cuánto vive en Redis el listado de cuentas de un cliente. Se invalida al
+    # cambiar cualquier cuenta; el TTL es un tope por si una invalidación se pierde.
+    ttl-cuentas: ${CACHE_TTL_CUENTAS:5m}
+  login:
+    # Límite de intentos fallidos de login por usuario, guardado en Redis.
+    max-intentos: ${LOGIN_MAX_INTENTOS:5}
+    ventana: ${LOGIN_VENTANA:15m}
   demo:
     # Carga clientes, cuentas y usuarios de ejemplo si la base está vacía.
     cargar-datos: ${CARGAR_DATOS_DEMO:true}
